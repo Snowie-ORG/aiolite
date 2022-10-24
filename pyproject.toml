@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "asyncsqlite"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["Your Name <you@example.com>"]
 readme = "README.md"
@@ -12,6 +12,9 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
+]
+include = [
+    "LICENSE",
 ]
 
 [tool.poetry.dependencies]
