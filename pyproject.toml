@@ -18,7 +18,7 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.7"
+python = ">=3.7.2,<4.0"
 aiosqlite = "^0.17.0"
 
 
@@ -29,6 +29,8 @@ pytest-order = "^1.0.1"
 pytest-cov = "^4.0.0"
 pytest-profiling = "^1.7.0"
 mypy = "^0.982"
+aiosqlite = "^0.17.0"
+pylint = "^2.15.5"
 
 [build-system]
 requires = ["poetry-core"]
