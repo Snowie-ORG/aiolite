@@ -23,22 +23,6 @@ async def test_initialization(create_memory_pool):
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("create_memory_pool")
-async def test_acquiring_with(create_memory_pool):
-    pool = await create_memory_pool()
-    async with pool.acquire() as conn:
-        assert pool.size == 3
-        assert len(pool._connections) == 1
-        assert len(pool._free) == 2
-        cursor = await conn.cursor()
-        await cursor.execute(CREATE_TABLE_SQL)
-        cursor = await cursor.execute(SELECT_SQL)
-        rows = await cursor.fetchall()
-        assert len(rows) == 0
-        await cursor.close()
-    await pool.close()
-
-@pytest.mark.asyncio
-@pytest.mark.usefixtures("create_memory_pool")
 async def test_acquiring(create_memory_pool):
     pool = await create_memory_pool()
     conn = await pool.acquire()
@@ -51,6 +35,22 @@ async def test_acquiring(create_memory_pool):
     rows = await cursor.fetchall()
     assert len(rows) == 0
     await cursor.close()
+    await pool.close()
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("create_memory_pool")
+async def test_acquiring_with(create_memory_pool):
+    pool = await create_memory_pool()
+    async with pool.acquire() as conn:
+        assert pool.size == 3
+        assert len(pool._connections) == 1
+        assert len(pool._free) == 2
+        cursor = await conn.cursor()
+        await cursor.execute(CREATE_TABLE_SQL)
+        cursor = await cursor.execute(SELECT_SQL)
+        rows = await cursor.fetchall()
+        assert len(rows) == 0
+        await cursor.close()
     await pool.close()
 
 @pytest.mark.asyncio

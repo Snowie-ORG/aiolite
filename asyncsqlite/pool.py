@@ -5,6 +5,7 @@ from typing import Tuple, List, Dict, Any, Optional
 from asyncio import Event
 import aiosqlite
 
+
 class PoolAcquireWrapper:
     """
     Wrapper class that allows you to access connection
@@ -25,7 +26,6 @@ class PoolAcquireWrapper:
     async def __aexit__(self, *args, **kwargs):
         assert self.connection is not None
         await self._pool.release(self.connection)
-        self.connection = None
 
 
 class Pool:
@@ -112,9 +112,12 @@ class Pool:
         assert self._is_initialized
         assert connection in self._connections, \
         "unknown connection"
-        await connection.close()
+        if len(self._free) < self.minsize:
+            await connection.rollback()
+            self._free.append(connection)
+        else:
+            await connection.close()
         self._connections.remove(connection)
-        await self.fill_free_pool()
         self._release_event.set()
 
 
