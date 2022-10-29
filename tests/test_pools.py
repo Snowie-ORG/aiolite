@@ -35,6 +35,7 @@ async def test_acquiring(create_memory_pool):
     rows = await cursor.fetchall()
     assert len(rows) == 0
     await cursor.close()
+    await pool.release(conn)
     await pool.close()
 
 @pytest.mark.asyncio
@@ -57,9 +58,10 @@ async def test_acquiring_with(create_memory_pool):
 @pytest.mark.usefixtures("create_memory_pool")
 async def test_acquiring_many(create_memory_pool):
     pool = await create_memory_pool()
-    for _ in range(5):
-        await pool.acquire()
-    conn = await pool.acquire()
+    conns = []
+    for _ in range(6):
+        conns.append(await pool.acquire())
+    conn = conns[0]
     assert pool.size == 6
     assert len(pool._connections) == 6
     assert len(pool._free) == 0
@@ -69,4 +71,6 @@ async def test_acquiring_many(create_memory_pool):
     rows = await cursor.fetchall()
     assert len(rows) == 0
     await cursor.close()
+    for connection in conns:
+        await pool.release(connection)
     await pool.close()

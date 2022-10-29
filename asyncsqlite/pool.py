@@ -2,7 +2,7 @@
 Pooling realization by aiosqlite lib
 """
 from typing import Tuple, List, Dict, Any, Optional
-from asyncio import Event
+from asyncio import Event, Lock
 import aiosqlite
 
 
@@ -48,7 +48,9 @@ class Pool:
         self._connection_args: Tuple[Any, ...] = connection_args
         self._connection_kwargs: Dict[str, Any] = connection_kwargs
         self._release_event: Event = Event()
+        self._lock: Lock = Lock()
         self._is_initialized: bool = False
+        self._is_closing = False
 
     @property
     def minsize(self):
@@ -67,16 +69,34 @@ class Pool:
 
     async def init(self):
         """inits pool with given parameters"""
-        await self.fill_free_pool()
+        assert self.size == 0
+        for _ in range(self.minsize):
+            self._free.append(
+                await aiosqlite.connect(*self._connection_args, **self._connection_kwargs)
+            )
         self._is_initialized = True
 
-    async def close(self):
+    async def close(self, immediately=False):
         """close all pool connections"""
-        for connection in self._connections + self._free:
+        assert self._is_initialized, "Pool has been closed"
+        self._is_closing = True
+        await self._lock.acquire()
+        for connection in self._free:
             await connection.close()
-        self._connections = []
         self._free = []
+        if immediately:
+            for connection in self._connections:
+                await connection.close()
+        else:
+            while len(self._connections) > 0:
+                if self._lock.locked():
+                    self._lock.release()
+                await self._release_event.wait()
+                await self._lock.acquire()
+        self._connections = []
         self._is_initialized = False
+        self._is_closing = False
+        self._lock.release()
         self._release_event.set()
 
     def acquire(self) -> PoolAcquireWrapper:
@@ -85,40 +105,37 @@ class Pool:
 
     async def _acquire(self) -> aiosqlite.Connection:
         """acquire connection if pool has size for it"""
-        assert self._is_initialized
+        assert self._is_initialized or not self._is_closing, "Pool has been closed"
+        await self._lock.acquire()
         if len(self._connections) >= self._maxsize:
+            self._lock.release()
             await self._release_event.wait()
-        assert self._is_initialized
-        connection = None
-        if len(self._free) > 0:
-            connection = self._free.pop()
         else:
-            connection = await aiosqlite.connect(*self._connection_args, **self._connection_kwargs)
-        self._connections.append(connection)
+            self._lock.release()
+        assert self._is_initialized or not self._is_closing, "Pool has been closed"
+        connection = None
+        async with self._lock:
+            if len(self._free) > 0:
+                connection = self._free.pop()
+            else:
+                connection = await aiosqlite.connect(*self._connection_args,
+                                                     **self._connection_kwargs)
+            self._connections.append(connection)
         return connection
-
-    async def fill_free_pool(self):
-        """fill free pool with minsize connections"""
-        free_fill_count = self.minsize - self.size
-        if free_fill_count < 1 or self.size >= self.maxsize:
-            return
-        for _ in range(free_fill_count):
-            self._free.append(
-                await aiosqlite.connect(*self._connection_args, **self._connection_kwargs)
-            )
 
     async def release(self, connection: aiosqlite.Connection):
         """kill connection and delete it from pool"""
         assert self._is_initialized
         assert connection in self._connections, \
         "unknown connection"
-        if len(self._free) < self.minsize:
-            await connection.rollback()
-            self._free.append(connection)
-        else:
-            await connection.close()
-        self._connections.remove(connection)
-        self._release_event.set()
+        async with self._lock:
+            if len(self._free) < self.minsize and not self._is_closing:
+                await connection.rollback()
+                self._free.append(connection)
+            else:
+                await connection.close()
+            self._connections.remove(connection)
+            self._release_event.set()
 
 
 async def create_pool(*connection_args, minsize: int = 1, maxsize: int = 10,
