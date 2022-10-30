@@ -30,10 +30,10 @@ lint: install
 
 .PHONY: test
 test: install
-	$(POETRY) run pytest -s --cov $(MODULE_NAME) --asyncio-mode=auto --cov-fail-under=90 --profile --cov-report term-missing tests/
+	$(POETRY) run pytest -s --cov $(MODULE_NAME) --asyncio-mode=auto --cov-fail-under=85 --profile --cov-report term-missing tests/
 
 .PHONY: build
-build: install
+build: install clean
 	$(POETRY) build
 
 .PHONY: clean

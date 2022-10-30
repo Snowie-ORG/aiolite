@@ -8,5 +8,5 @@ from asyncsqlite.pool import Pool, create_pool
 def create_memory_pool() -> Pool:
     """fixture func that returns func that creates pool"""
     async def memory_pool_creator():
-        return await create_pool(":memory:", minsize=3, maxsize=15)
+        return await create_pool(":memory:", minsize=1, maxsize=1)
     return memory_pool_creator

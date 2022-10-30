@@ -32,7 +32,8 @@ class Pool:
     """
     Pool realization
     """
-    def __init__(self, *connection_args, minsize: int = 1, maxsize: int = 10, **connection_kwargs):
+    def __init__(self, *connection_args, minsize: int = None, maxsize: int = None,
+                 **connection_kwargs):
         """
         minsize arg (int, minsize > 0) is a minimal count of connections
         maxsize arg (int, maxsize > 0) is a maximal count of connections
@@ -41,6 +42,20 @@ class Pool:
         "minsize (int value) must be greater than 0"
         assert isinstance(maxsize, int) and maxsize > 0 and minsize <= maxsize, \
         "maxsize (int value) must be greater than 0 and >= minsize"
+
+        connection_url = None
+        if len(connection_args) > 0:
+            connection_url = connection_args[0]
+        elif connection_kwargs.get('database'):
+            connection_url = connection_kwargs['database']
+        if connection_url == ":memory:":
+            assert (minsize is None and maxsize is None) or (minsize == 1 and maxsize == 1), \
+            "Can't use minsize != 1 and maxsize != 1 with :memory:"
+            minsize = 1
+            maxsize = 1
+        else:
+            minsize = 1
+            maxsize = 10
         self._minsize: int = minsize
         self._maxsize: int = maxsize
         self._connections: List[aiosqlite.Connection] = []
@@ -107,7 +122,7 @@ class Pool:
         """acquire connection if pool has size for it"""
         assert self._is_initialized or not self._is_closing, "Pool has been closed"
         await self._lock.acquire()
-        if len(self._connections) >= self._maxsize:
+        if len(self._connections) >= self.maxsize:
             self._lock.release()
             await self._release_event.wait()
         else:
