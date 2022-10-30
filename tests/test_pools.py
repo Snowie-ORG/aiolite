@@ -47,6 +47,14 @@ async def test_acquiring_with(create_memory_pool):
         assert len(pool._free) == 0
         cursor = await conn.cursor()
         await cursor.execute(CREATE_TABLE_SQL)
+        rows = await cursor.fetchall()
+        assert len(rows) == 0
+        await cursor.close()
+    async with pool.acquire() as conn:
+        assert pool.size == 1
+        assert len(pool._connections) == 1
+        assert len(pool._free) == 0
+        cursor = await conn.cursor()
         cursor = await cursor.execute(SELECT_SQL)
         rows = await cursor.fetchall()
         assert len(rows) == 0

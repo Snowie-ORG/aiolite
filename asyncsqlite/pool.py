@@ -113,6 +113,7 @@ class Pool:
         self._is_closing = False
         self._lock.release()
         self._release_event.set()
+        self._release_event.clear()
 
     def acquire(self) -> PoolAcquireWrapper:
         """create acquire wrapper"""
@@ -125,6 +126,7 @@ class Pool:
         if len(self._connections) >= self.maxsize:
             self._lock.release()
             await self._release_event.wait()
+            assert len(self._connections) < self.maxsize, "asyncsqlite bug"
         else:
             self._lock.release()
         assert self._is_initialized or not self._is_closing, "Pool has been closed"
@@ -151,6 +153,7 @@ class Pool:
                 await connection.close()
             self._connections.remove(connection)
             self._release_event.set()
+            self._release_event.clear()
 
 
 async def create_pool(*connection_args, minsize: int = 1, maxsize: int = 10,
