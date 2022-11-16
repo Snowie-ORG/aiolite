@@ -123,11 +123,11 @@ class Pool:
         """acquire connection if pool has size for it"""
         assert self._is_initialized or not self._is_closing, "Pool has been closed"
         await self._lock.acquire()
-        if len(self._connections) >= self.maxsize:
+        while len(self._connections) >= self.maxsize:
             self._lock.release()
             await self._release_event.wait()
-            assert len(self._connections) < self.maxsize, "asyncsqlite bug"
-        else:
+            await self._lock.acquire()
+        if self._lock.locked():
             self._lock.release()
         assert self._is_initialized or not self._is_closing, "Pool has been closed"
         connection = None
@@ -140,6 +140,19 @@ class Pool:
             self._connections.append(connection)
         return connection
 
+    def get_isolation_level(self) -> str:
+        """returns isolation level from connection args, kwargs or default value (DEFERRED)"""
+        if len(self._connection_args) >= 4:
+            return self._connection_args[3]
+        if 'isolation_level' in self._connection_kwargs:
+            return self._connection_kwargs['isolation_level']
+        return 'DEFERRED'
+
+    async def reset_connection_params(self, connection: aiosqlite.Connection):
+        """resets parameters of connection to default"""
+        await connection.rollback()
+        connection.isolation_level = self.get_isolation_level()
+
     async def release(self, connection: aiosqlite.Connection):
         """kill connection and delete it from pool"""
         assert self._is_initialized
@@ -147,7 +160,7 @@ class Pool:
         "unknown connection"
         async with self._lock:
             if len(self._free) < self.minsize and not self._is_closing:
-                await connection.rollback()
+                await self.reset_connection_params(connection)
                 self._free.append(connection)
             else:
                 await connection.close()
